@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 import numpy as np
-from scipy import signal
 import sys, wave
 
 # Read a tone from a wave file.
