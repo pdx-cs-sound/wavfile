@@ -1,24 +1,56 @@
 #!/usr/bin/python3
+from collections import namedtuple
 import numpy as np
-import sys, wave
+import sys, soundfile
+WaveInfo = namedtuple(
+    "WaveInfo",
+    "nchannels samptype sampwidth sampbytes framerate nframes",
+)
 
 # Read a tone from a wave file.
 def read_wave(filename):
-    w = wave.open(filename, "rb")
-    info = w.getparams()
-    fbytes = w.readframes(info.nframes)
-    w.close()
-    sampletypes = {
-        1: np.uint8,
-        2: np.int16,
-        4: np.int32,
-    }
-    if info.sampwidth not in sampletypes:
-        raise IOException(f"unsupported sample width {info.swampwidth}")
-    sampletype = sampletypes[info.sampwidth]
-    samples = np.frombuffer(fbytes, dtype=sampletype)
-    frames = np.reshape(samples, (-1, info.nchannels))
-    return (info, frames)
+    with soundfile.SoundFile(filename) as f:
+        if f.format != 'WAV':
+            raise IOException(f"unknown file format {f.format}")
+        nchannels = f.channels
+        framerate = f.samplerate
+        nframes = f.frames
+        if f.subtype.startswith('PCM_'):
+            samptype = 'fixed'
+            sampwidth = int(f.subtype[4:])
+            if sampwidth <= 8:
+                sampbytes = 1
+                dtype = 'uint8'
+            elif sampwidth <= 16:
+                sampbytes = 2
+                dtype = 'int16'
+            elif sampwidth <= 32:
+                sampbytes = 4
+                dtype = 'int32'
+            else:
+                raise IOException(f"unknown PCM size {nbits}")
+            data = f.read(dtype=dtype, always_2d=True)
+        elif f.subtype == 'FLOAT':
+            samptype = 'float'
+            sampwidth = 32
+            sampbytes = 4
+            data = f.read(dtype='float32', always_2d=True)
+        elif f.subtype == 'DOUBLE':
+            samptype = 'float'
+            sampwidth = 64
+            sampbytes = 8
+            data = f.read(dtype='float64', always_2d=True)
+        else:
+            raise IOException(f"unknown sample type {info.subtype}")
+    info = WaveInfo(
+        nchannels,
+        samptype,
+        sampwidth,
+        sampbytes,
+        framerate,
+        nframes,
+    )
+    return (info, data)
 
 inner = False
 for fname in sys.argv[1:]:
@@ -35,18 +67,25 @@ for fname in sys.argv[1:]:
     print(f"name={fname}")
     print(f"channels={info.nchannels}")
     print(f"framerate={info.framerate}")
-    print(f"samplewidth={8 * info.sampwidth}")
+    print(f"format={info.samptype}")
+    print(f"samplewidth={info.sampwidth}")
     print(f"frames={info.nframes}")
-    formats = {
-        1: ("u8", -128, 128),
-        2: ("s16L", -0x8000, 0),
-        4: ("s32L", -0x80000000, 0)
-    }
-    if info.sampwidth not in formats:
-        continue
-    format_name, format_min, format_mid = formats[info.sampwidth]
-    print(f"format={format_name}")
     samples = wav.reshape(-1)
+
+    format_mid = 0
+    if info.samptype == 'fixed':
+        if info.sampbytes == 1:
+            format_mid = 1 << (info.sampwidth - 1)
+            format_min = 0
+            format_max = (1 << info.sampwidth) - 1
+        else:
+            format_min = -(1 << (info.sampwidth - 1))
+            format_max = -format_min + 1
+    elif info.samptype == 'float':
+        format_min = -1.0
+        format_max = 1.0
+    else:
+        continue
 
     sample_min = np.min(samples)
     print(f"min={sample_min}")
@@ -56,7 +95,6 @@ for fname in sys.argv[1:]:
 
     sample_max = np.max(samples)
     print(f"max={sample_max}")
-    format_max = -format_min - 1
     sphi = (sample_max - format_mid) / format_max
     if sphi > 0:
         print(f"max_fraction={sphi:.3}")
