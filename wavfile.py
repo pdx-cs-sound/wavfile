@@ -11,7 +11,7 @@ WaveInfo = namedtuple(
 def read_wave(filename):
     with soundfile.SoundFile(filename) as f:
         if f.format != 'WAV':
-            raise IOException(f"unknown file format {f.format}")
+            raise Exception(f"unknown file format {f.format}")
         nchannels = f.channels
         framerate = f.samplerate
         nframes = f.frames
@@ -28,7 +28,7 @@ def read_wave(filename):
                 sampbytes = 4
                 dtype = 'int32'
             else:
-                raise IOException(f"unknown PCM size {nbits}")
+                raise Exception(f"unknown PCM size {nbits}")
             data = f.read(dtype=dtype, always_2d=True)
         elif f.subtype == 'FLOAT':
             samptype = 'float'
@@ -41,7 +41,7 @@ def read_wave(filename):
             sampbytes = 8
             data = f.read(dtype='float64', always_2d=True)
         else:
-            raise IOException(f"unknown sample type {info.subtype}")
+            raise Exception(f"unknown sample type {info.subtype}")
     info = WaveInfo(
         nchannels,
         samptype,
